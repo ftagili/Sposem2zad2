@@ -1,0 +1,500 @@
+/* Worker procedures for the source-language version of task2.
+   The pipeline entry points and main procedure are in spo_task2_v18_pipeline.src.
+   Together these two .src files form the full program text shown on defense. */
+
+Stream getFirstInput(int params);
+Stream getSecondInput(int params);
+Stream getThirdInput(int params);
+Stream getOutput(int params);
+bool getNonblock(int params);
+bool getFlag(int params);
+int getIntValue(int params);
+string getTextValue(int params);
+string getReferenceGroup(int params);
+
+bool canRead(Stream input, bool nonblock);
+Record readRecord(Stream input, bool nonblock);
+int writeRecord(Stream output, Record record, bool nonblock);
+int writeText(Stream output, string text, bool nonblock);
+int closeWriter(Stream output);
+
+int getIntField(Record record, string fieldName);
+string getTextField(Record record, string fieldName);
+int setIntField(Record record, string fieldName, int value);
+int setTextField(Record record, string fieldName, string value);
+
+Table createTable();
+Table appendRow(Table table, Record record);
+Record findRow(Table table, string fieldName, int value);
+bool hasRow(Table table, string fieldName, int value);
+bool hasRowWithNotEqualInt(Table table, string fieldName, int idValue, string checkField,
+                           int expectedValue);
+int countDistinctByField(Table table, string fieldName);
+
+CounterMap createCounterMap();
+CounterMap incrementCounter(CounterMap map, string key);
+int getCounter(CounterMap map, string key);
+StringList getKeys(CounterMap map);
+bool hasNextString(StringList list);
+string readNextString(StringList list);
+
+AgeMap createAgeMap();
+AgeMap addAge(AgeMap map, string groupName, int age);
+double getAverageAge(AgeMap map, string groupName);
+StringList getAgeGroups(AgeMap map);
+bool hasNextRow(Table table);
+Record readNextRow(Table table);
+
+int calculateAge(string birthday);
+string formatInt(int value);
+string formatDouble(double value);
+string formatPair(string left, string right);
+string formatIntPair(int left, int right);
+string formatThree(string first, string second, string third);
+string formatSeven(string a, int b, string c, string d, string e, string f, string g);
+string formatSix(string a, int b, string c, string d, string e, string f);
+string formatFour(int a, string b, string c, string d);
+
+int CsvSourceProc(int params) {
+    Stream input = getFirstInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+
+    while (canRead(input, nonblock)) {
+        Record row = readRecord(input, nonblock);
+        writeRecord(output, row, nonblock);
+    }
+
+    closeWriter(output);
+    return 0;
+}
+
+int FilterIntFieldProc(int params) {
+    Stream input = getFirstInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    string fieldName = getTextValue(params);
+    int threshold = getIntValue(params);
+
+    while (canRead(input, nonblock)) {
+        Record row = readRecord(input, nonblock);
+        int value = getIntField(row, fieldName);
+
+        if (value < threshold) {
+            writeRecord(output, row, nonblock);
+        }
+        if (value == threshold) {
+            if (getFlag(params)) {
+                writeRecord(output, row, nonblock);
+            }
+        }
+        if (value > threshold) {
+            if (getFlag(params) == false) {
+                writeRecord(output, row, nonblock);
+            }
+        }
+    }
+
+    closeWriter(output);
+    return 0;
+}
+
+int FilterTextFieldProc(int params) {
+    Stream input = getFirstInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    string fieldName = getTextValue(params);
+    string threshold = getReferenceGroup(params);
+
+    while (canRead(input, nonblock)) {
+        Record row = readRecord(input, nonblock);
+        string value = getTextField(row, fieldName);
+
+        if (value < threshold) {
+            writeRecord(output, row, nonblock);
+        }
+        if (value > threshold) {
+            if (getFlag(params)) {
+                writeRecord(output, row, nonblock);
+            }
+        }
+        if (value == threshold) {
+            if (getIntValue(params) == 1) {
+                writeRecord(output, row, nonblock);
+            }
+        }
+    }
+
+    closeWriter(output);
+    return 0;
+}
+
+int JoinTypesVedomostiProc(int params) {
+    Stream typesInput = getFirstInput(params);
+    Stream vedsInput = getSecondInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    bool outputDate = getFlag(params);
+    Table typesTable = createTable();
+
+    while (canRead(typesInput, nonblock)) {
+        Record typeRow = readRecord(typesInput, nonblock);
+        typesTable = appendRow(typesTable, typeRow);
+    }
+
+    while (canRead(vedsInput, nonblock)) {
+        Record vedRow = readRecord(vedsInput, nonblock);
+        int typeId = getIntField(vedRow, "type_id");
+        Record foundType = findRow(typesTable, "id", typeId);
+        string left = "NULL";
+
+        if (hasRow(typesTable, "id", typeId)) {
+            left = getTextField(foundType, "id_text");
+        }
+
+        if (outputDate) {
+            writeText(output, formatPair(left, getTextField(vedRow, "date")), nonblock);
+        }
+        if (outputDate == false) {
+            writeText(output, formatPair(left, getTextField(vedRow, "id_text")), nonblock);
+        }
+    }
+
+    closeWriter(output);
+    return 0;
+}
+
+int JoinPeopleStudiesStudentsProc(int params) {
+    Stream peopleInput = getFirstInput(params);
+    Stream studiesInput = getSecondInput(params);
+    Stream studentsInput = getThirdInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    bool outputNzk = getFlag(params);
+    Table peopleTable = createTable();
+    Table studiesTable = createTable();
+    Table studentsTable = createTable();
+
+    while (canRead(peopleInput, nonblock)) {
+        peopleTable = appendRow(peopleTable, readRecord(peopleInput, nonblock));
+    }
+    while (canRead(studiesInput, nonblock)) {
+        studiesTable = appendRow(studiesTable, readRecord(studiesInput, nonblock));
+    }
+    while (canRead(studentsInput, nonblock)) {
+        studentsTable = appendRow(studentsTable, readRecord(studentsInput, nonblock));
+    }
+
+    while (hasNextRow(peopleTable)) {
+        Record personRow = readNextRow(peopleTable);
+        int personId = getIntField(personRow, "id");
+
+        if (hasRow(studiesTable, "person_id", personId)) {
+            if (hasRow(studentsTable, "person_id", personId)) {
+                Record studyRow = findRow(studiesTable, "person_id", personId);
+                Record studentRow = findRow(studentsTable, "person_id", personId);
+
+                if (outputNzk) {
+                    writeText(output,
+                              formatThree(getTextField(personRow, "surname"),
+                                          getTextField(studyRow, "nzk"),
+                                          getTextField(studentRow, "start_date")),
+                              nonblock);
+                }
+                if (outputNzk == false) {
+                    writeText(output,
+                              formatThree(getTextField(personRow, "surname"),
+                                          getTextField(personRow, "id_text"),
+                                          getTextField(studentRow, "group_name")),
+                              nonblock);
+                }
+            }
+        }
+    }
+
+    closeWriter(output);
+    return 0;
+}
+
+int UniqueBirthdaysProc(int params) {
+    Stream peopleInput = getFirstInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    Table peopleTable = createTable();
+
+    while (canRead(peopleInput, nonblock)) {
+        peopleTable = appendRow(peopleTable, readRecord(peopleInput, nonblock));
+    }
+
+    writeText(output, formatInt(countDistinctByField(peopleTable, "birthday")), nonblock);
+    closeWriter(output);
+    return 0;
+}
+
+int PatronymicCountProc(int params) {
+    Stream peopleInput = getFirstInput(params);
+    Stream studiesInput = getSecondInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    Table peopleTable = createTable();
+    CounterMap counters = createCounterMap();
+
+    while (canRead(peopleInput, nonblock)) {
+        peopleTable = appendRow(peopleTable, readRecord(peopleInput, nonblock));
+    }
+
+    while (canRead(studiesInput, nonblock)) {
+        Record studyRow = readRecord(studiesInput, nonblock);
+        int personId = getIntField(studyRow, "person_id");
+        Record personRow = findRow(peopleTable, "id", personId);
+
+        if (getTextField(studyRow, "form") == "заочная") {
+            counters = incrementCounter(counters, getTextField(personRow, "patronymic"));
+        }
+    }
+
+    StringList keys = getKeys(counters);
+    while (hasNextString(keys)) {
+        string key = readNextString(keys);
+        if (getCounter(counters, key) == 10) {
+            writeText(output, formatPair(key, formatInt(getCounter(counters, key))), nonblock);
+        }
+    }
+
+    closeWriter(output);
+    return 0;
+}
+
+int GroupAgeProc(int params) {
+    Stream peopleInput = getFirstInput(params);
+    Stream studentsInput = getSecondInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    string referenceGroup = getReferenceGroup(params);
+    bool lessThanReference = getFlag(params);
+    Table peopleTable = createTable();
+    AgeMap ages = createAgeMap();
+    int referenceAge = -1;
+
+    while (canRead(peopleInput, nonblock)) {
+        peopleTable = appendRow(peopleTable, readRecord(peopleInput, nonblock));
+    }
+
+    while (canRead(studentsInput, nonblock)) {
+        Record studentRow = readRecord(studentsInput, nonblock);
+        int personId = getIntField(studentRow, "person_id");
+        Record personRow = findRow(peopleTable, "id", personId);
+        int age = calculateAge(getTextField(personRow, "birthday"));
+        string groupName = getTextField(studentRow, "group_name");
+
+        ages = addAge(ages, groupName, age);
+        if (groupName == referenceGroup) {
+            if (referenceAge < 0) {
+                referenceAge = age;
+            }
+            if (age < referenceAge) {
+                referenceAge = age;
+            }
+        }
+    }
+
+    StringList groups = getAgeGroups(ages);
+    while (hasNextString(groups)) {
+        string groupName = readNextString(groups);
+        double avgAge = getAverageAge(ages, groupName);
+
+        if (lessThanReference) {
+            if (avgAge < referenceAge) {
+                writeText(output, formatPair(groupName, formatDouble(avgAge)), nonblock);
+            }
+        }
+        if (lessThanReference == false) {
+            if (avgAge == referenceAge) {
+                writeText(output, formatPair(groupName, formatDouble(avgAge)), nonblock);
+            }
+        }
+    }
+
+    closeWriter(output);
+    return 0;
+}
+
+int EnrollmentListProc(int params) {
+    Stream peopleInput = getFirstInput(params);
+    Stream studiesInput = getSecondInput(params);
+    Stream studentsInput = getThirdInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    bool expelledAfter = getFlag(params);
+    Table peopleTable = createTable();
+    Table studiesTable = createTable();
+
+    while (canRead(peopleInput, nonblock)) {
+        peopleTable = appendRow(peopleTable, readRecord(peopleInput, nonblock));
+    }
+    while (canRead(studiesInput, nonblock)) {
+        studiesTable = appendRow(studiesTable, readRecord(studiesInput, nonblock));
+    }
+
+    while (canRead(studentsInput, nonblock)) {
+        Record studentRow = readRecord(studentsInput, nonblock);
+        int personId = getIntField(studentRow, "person_id");
+        Record studyRow = findRow(studiesTable, "person_id", personId);
+        Record personRow = findRow(peopleTable, "id", personId);
+
+        if (getTextField(studyRow, "direction_code") == "230101") {
+            if (expelledAfter) {
+                if (getTextField(studentRow, "status") == "expelled") {
+                    if (getTextField(studentRow, "end_date") > "2012-09-01") {
+                        writeText(output,
+                                  formatSix(getTextField(studentRow, "group_name"),
+                                            getIntField(personRow, "id"),
+                                            getTextField(personRow, "surname"),
+                                            getTextField(personRow, "name"),
+                                            getTextField(personRow, "patronymic"),
+                                            getTextField(studentRow, "order_number")),
+                                  nonblock);
+                    }
+                }
+            }
+            if (expelledAfter == false) {
+                if (getTextField(studyRow, "form") == "очная") {
+                    if (getIntField(studyRow, "course") == 1) {
+                        if (getTextField(studentRow, "start_date") < "2012-09-01") {
+                            writeText(output,
+                                      formatSeven(getTextField(studentRow, "group_name"),
+                                                  getIntField(personRow, "id"),
+                                                  getTextField(personRow, "surname"),
+                                                  getTextField(personRow, "name"),
+                                                  getTextField(personRow, "patronymic"),
+                                                  getTextField(studentRow, "order_number"),
+                                                  getTextField(studentRow, "order_state")),
+                                      nonblock);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    closeWriter(output);
+    return 0;
+}
+
+int ExcellentCountProc(int params) {
+    Stream studiesInput = getFirstInput(params);
+    Stream vedsInput = getSecondInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    Table studiesTable = createTable();
+    Table vedsTable = createTable();
+    int count = 0;
+
+    while (canRead(studiesInput, nonblock)) {
+        studiesTable = appendRow(studiesTable, readRecord(studiesInput, nonblock));
+    }
+    while (canRead(vedsInput, nonblock)) {
+        vedsTable = appendRow(vedsTable, readRecord(vedsInput, nonblock));
+    }
+
+    while (hasNextRow(studiesTable)) {
+        Record studyRow = readNextRow(studiesTable);
+        int personId = getIntField(studyRow, "person_id");
+
+        if (getTextField(studyRow, "faculty") == "ФКТИУ") {
+            if (hasRow(vedsTable, "person_id", personId)) {
+                if (hasRowWithNotEqualInt(vedsTable, "person_id", personId, "mark", 5) == false) {
+                    count = count + 1;
+                }
+            }
+        }
+    }
+
+    writeText(output, formatInt(count), nonblock);
+    closeWriter(output);
+    return 0;
+}
+
+int Group2011Proc(int params) {
+    Stream studiesInput = getFirstInput(params);
+    Stream studentsInput = getSecondInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    Table studiesTable = createTable();
+    CounterMap counters = createCounterMap();
+
+    while (canRead(studiesInput, nonblock)) {
+        studiesTable = appendRow(studiesTable, readRecord(studiesInput, nonblock));
+    }
+
+    while (canRead(studentsInput, nonblock)) {
+        Record studentRow = readRecord(studentsInput, nonblock);
+        int personId = getIntField(studentRow, "person_id");
+        Record studyRow = findRow(studiesTable, "person_id", personId);
+
+        if (getTextField(studyRow, "department") == "Кафедра вычислительной техники") {
+            if (getTextField(studentRow, "start_date") <= "2011-12-31") {
+                if (getTextField(studentRow, "end_date") == "") {
+                    counters = incrementCounter(counters, getTextField(studentRow, "group_name"));
+                }
+                if (getTextField(studentRow, "end_date") >= "2011-01-01") {
+                    counters = incrementCounter(counters, getTextField(studentRow, "group_name"));
+                }
+            }
+        }
+    }
+
+    StringList keys = getKeys(counters);
+    while (hasNextString(keys)) {
+        string key = readNextString(keys);
+        if (getCounter(counters, key) < 5) {
+            writeText(output, formatPair(key, formatInt(getCounter(counters, key))), nonblock);
+        }
+    }
+
+    closeWriter(output);
+    return 0;
+}
+
+int NonStudentsProc(int params) {
+    Stream peopleInput = getFirstInput(params);
+    Stream studentsInput = getSecondInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+    Table studentsTable = createTable();
+
+    while (canRead(studentsInput, nonblock)) {
+        studentsTable = appendRow(studentsTable, readRecord(studentsInput, nonblock));
+    }
+
+    while (canRead(peopleInput, nonblock)) {
+        Record personRow = readRecord(peopleInput, nonblock);
+        int personId = getIntField(personRow, "id");
+
+        if (hasRow(studentsTable, "person_id", personId) == false) {
+            writeText(output,
+                      formatFour(getIntField(personRow, "id"),
+                                 getTextField(personRow, "surname"),
+                                 getTextField(personRow, "name"),
+                                 getTextField(personRow, "patronymic")),
+                      nonblock);
+        }
+    }
+
+    closeWriter(output);
+    return 0;
+}
+
+int ResultsSinkProc(int params) {
+    Stream input = getFirstInput(params);
+    Stream output = getOutput(params);
+    bool nonblock = getNonblock(params);
+
+    while (canRead(input, nonblock)) {
+        Record row = readRecord(input, nonblock);
+        writeRecord(output, row, nonblock);
+    }
+
+    closeWriter(output);
+    return 0;
+}

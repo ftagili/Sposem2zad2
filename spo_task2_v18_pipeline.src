@@ -1,0 +1,610 @@
+/* Main procedures for the source-language version of task2.
+   Worker implementations are in spo_task2_v18_workers.src.
+   Together these two .src files form the full program text shown on defense. */
+
+Pipe openTypesCsvPipe();
+Pipe openVedomostiCsvPipe();
+Pipe openPeopleCsvPipe();
+Pipe openStudiesCsvPipe();
+Pipe openStudentsCsvPipe();
+Pipe open48_1ResultPipe();
+Pipe open48_2ResultPipe();
+Pipe open48_3ResultPipe();
+Pipe open48_4ResultPipe();
+Pipe open48_5ResultPipe();
+Pipe open48_6ResultPipe();
+Pipe open48_7ResultPipe();
+Pipe open78_1ResultPipe();
+Pipe open78_2ResultPipe();
+Pipe open78_3ResultPipe();
+Pipe open78_4ResultPipe();
+Pipe open78_5ResultPipe();
+Pipe open78_6ResultPipe();
+Pipe open78_7ResultPipe();
+Pipe createPipe();
+Stream getInputStream(Pipe pipe);
+Stream getOutputStream(Pipe pipe);
+int createThread(int procId, int params);
+int waitAllThreads();
+
+int makeSourceParams(Stream input, Stream output, bool nonblock);
+int makeSinkParams(Stream input, Stream output, bool nonblock);
+int makeSingleInputParams(Stream input, Stream output, bool nonblock);
+int makeTwoInputParams(Stream leftInput, Stream rightInput, Stream output, bool nonblock);
+
+int make48_1_types_filter_params(Stream input, Stream output);
+int make48_1_veds_filter_params(Stream input, Stream output);
+int make48_1_join_params(Stream typesInput, Stream vedsInput, Stream output);
+int make48_2_people_filter_params(Stream input, Stream output);
+int make48_2_studies_filter_params(Stream input, Stream output);
+int make48_2_students_filter_params(Stream input, Stream output);
+int make48_2_join_params(Stream peopleInput, Stream studiesInput, Stream studentsInput,
+                         Stream output);
+int make48_5_group_age_params(Stream peopleInput, Stream studentsInput, Stream output);
+int make48_6_enrollment_params(Stream peopleInput, Stream studiesInput, Stream studentsInput,
+                               Stream output);
+int make78_1_types_filter_params(Stream input, Stream output);
+int make78_1_veds_filter1_params(Stream input, Stream output);
+int make78_1_veds_filter2_params(Stream input, Stream output);
+int make78_1_join_params(Stream typesInput, Stream vedsInput, Stream output);
+int make78_2_people_filter_params(Stream input, Stream output);
+int make78_2_studies_filter_params(Stream input, Stream output);
+int make78_2_join_params(Stream peopleInput, Stream studiesInput, Stream studentsInput,
+                         Stream output);
+int make78_5_group_age_params(Stream peopleInput, Stream studentsInput, Stream output);
+int make78_6_enrollment_params(Stream peopleInput, Stream studiesInput, Stream studentsInput,
+                               Stream output);
+
+int CsvSourceProc(int params);
+int FilterIntFieldProc(int params);
+int FilterTextFieldProc(int params);
+int JoinTypesVedomostiProc(int params);
+int JoinPeopleStudiesStudentsProc(int params);
+int UniqueBirthdaysProc(int params);
+int PatronymicCountProc(int params);
+int GroupAgeProc(int params);
+int EnrollmentListProc(int params);
+int ExcellentCountProc(int params);
+int Group2011Proc(int params);
+int NonStudentsProc(int params);
+int ResultsSinkProc(int params);
+
+int Run48_1() {
+    Pipe rawTypesPipe = openTypesCsvPipe();
+    Pipe rawVedomostiPipe = openVedomostiCsvPipe();
+    Pipe parsedTypesPipe = createPipe();
+    Pipe parsedVedomostiPipe = createPipe();
+    Pipe filteredTypesPipe = createPipe();
+    Pipe filteredVedomostiPipe = createPipe();
+    Pipe joinedPipe = createPipe();
+    Pipe resultsPipe = open48_1ResultPipe();
+
+    Stream rawTypesInput = getInputStream(rawTypesPipe);
+    Stream rawVedomostiInput = getInputStream(rawVedomostiPipe);
+    Stream parsedTypesOutput = getOutputStream(parsedTypesPipe);
+    Stream parsedVedomostiOutput = getOutputStream(parsedVedomostiPipe);
+    Stream parsedTypesInput = getInputStream(parsedTypesPipe);
+    Stream parsedVedomostiInput = getInputStream(parsedVedomostiPipe);
+    Stream filteredTypesOutput = getOutputStream(filteredTypesPipe);
+    Stream filteredVedomostiOutput = getOutputStream(filteredVedomostiPipe);
+    Stream filteredTypesInput = getInputStream(filteredTypesPipe);
+    Stream filteredVedomostiInput = getInputStream(filteredVedomostiPipe);
+    Stream joinedOutput = getOutputStream(joinedPipe);
+    Stream joinedInput = getInputStream(joinedPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcTypesParams = makeSourceParams(rawTypesInput, parsedTypesOutput, false);
+    int srcVedomostiParams = makeSourceParams(rawVedomostiInput, parsedVedomostiOutput, false);
+    int filterTypesParams = make48_1_types_filter_params(parsedTypesInput, filteredTypesOutput);
+    int filterVedomostiParams =
+        make48_1_veds_filter_params(parsedVedomostiInput, filteredVedomostiOutput);
+    int joinParams = make48_1_join_params(filteredTypesInput, filteredVedomostiInput, joinedOutput);
+    int sinkParams = makeSinkParams(joinedInput, resultsOutput, false);
+
+    createThread(CsvSourceProc, srcTypesParams);
+    createThread(CsvSourceProc, srcVedomostiParams);
+    createThread(FilterIntFieldProc, filterTypesParams);
+    createThread(FilterIntFieldProc, filterVedomostiParams);
+    createThread(JoinTypesVedomostiProc, joinParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run48_2() {
+    Pipe rawPeoplePipe = openPeopleCsvPipe();
+    Pipe rawStudiesPipe = openStudiesCsvPipe();
+    Pipe rawStudentsPipe = openStudentsCsvPipe();
+    Pipe parsedPeoplePipe = createPipe();
+    Pipe parsedStudiesPipe = createPipe();
+    Pipe parsedStudentsPipe = createPipe();
+    Pipe filteredPeoplePipe = createPipe();
+    Pipe filteredStudiesPipe = createPipe();
+    Pipe filteredStudentsPipe = createPipe();
+    Pipe joinedPipe = createPipe();
+    Pipe resultsPipe = open48_2ResultPipe();
+
+    Stream rawPeopleInput = getInputStream(rawPeoplePipe);
+    Stream rawStudiesInput = getInputStream(rawStudiesPipe);
+    Stream rawStudentsInput = getInputStream(rawStudentsPipe);
+    Stream parsedPeopleOutput = getOutputStream(parsedPeoplePipe);
+    Stream parsedStudiesOutput = getOutputStream(parsedStudiesPipe);
+    Stream parsedStudentsOutput = getOutputStream(parsedStudentsPipe);
+    Stream parsedPeopleInput = getInputStream(parsedPeoplePipe);
+    Stream parsedStudiesInput = getInputStream(parsedStudiesPipe);
+    Stream parsedStudentsInput = getInputStream(parsedStudentsPipe);
+    Stream filteredPeopleOutput = getOutputStream(filteredPeoplePipe);
+    Stream filteredStudiesOutput = getOutputStream(filteredStudiesPipe);
+    Stream filteredStudentsOutput = getOutputStream(filteredStudentsPipe);
+    Stream filteredPeopleInput = getInputStream(filteredPeoplePipe);
+    Stream filteredStudiesInput = getInputStream(filteredStudiesPipe);
+    Stream filteredStudentsInput = getInputStream(filteredStudentsPipe);
+    Stream joinedOutput = getOutputStream(joinedPipe);
+    Stream joinedInput = getInputStream(joinedPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcPeopleParams = makeSourceParams(rawPeopleInput, parsedPeopleOutput, false);
+    int srcStudiesParams = makeSourceParams(rawStudiesInput, parsedStudiesOutput, false);
+    int srcStudentsParams = makeSourceParams(rawStudentsInput, parsedStudentsOutput, false);
+    int filterPeopleParams = make48_2_people_filter_params(parsedPeopleInput, filteredPeopleOutput);
+    int filterStudiesParams =
+        make48_2_studies_filter_params(parsedStudiesInput, filteredStudiesOutput);
+    int filterStudentsParams =
+        make48_2_students_filter_params(parsedStudentsInput, filteredStudentsOutput);
+    int joinParams = make48_2_join_params(filteredPeopleInput, filteredStudiesInput,
+                                          filteredStudentsInput, joinedOutput);
+    int sinkParams = makeSinkParams(joinedInput, resultsOutput, false);
+
+    createThread(CsvSourceProc, srcPeopleParams);
+    createThread(CsvSourceProc, srcStudiesParams);
+    createThread(CsvSourceProc, srcStudentsParams);
+    createThread(FilterTextFieldProc, filterPeopleParams);
+    createThread(FilterIntFieldProc, filterStudiesParams);
+    createThread(FilterTextFieldProc, filterStudentsParams);
+    createThread(JoinPeopleStudiesStudentsProc, joinParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run48_3() {
+    Pipe rawPeoplePipe = openPeopleCsvPipe();
+    Pipe parsedPeoplePipe = createPipe();
+    Pipe resultPipe = createPipe();
+    Pipe resultsPipe = open48_3ResultPipe();
+
+    Stream rawPeopleInput = getInputStream(rawPeoplePipe);
+    Stream parsedPeopleOutput = getOutputStream(parsedPeoplePipe);
+    Stream parsedPeopleInput = getInputStream(parsedPeoplePipe);
+    Stream resultOutput = getOutputStream(resultPipe);
+    Stream resultInput = getInputStream(resultPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcParams = makeSourceParams(rawPeopleInput, parsedPeopleOutput, false);
+    int workerParams = makeSingleInputParams(parsedPeopleInput, resultOutput, false);
+    int sinkParams = makeSinkParams(resultInput, resultsOutput, false);
+
+    createThread(CsvSourceProc, srcParams);
+    createThread(UniqueBirthdaysProc, workerParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run48_4() {
+    Pipe rawPeoplePipe = openPeopleCsvPipe();
+    Pipe rawStudiesPipe = openStudiesCsvPipe();
+    Pipe parsedPeoplePipe = createPipe();
+    Pipe parsedStudiesPipe = createPipe();
+    Pipe resultPipe = createPipe();
+    Pipe resultsPipe = open48_4ResultPipe();
+
+    Stream rawPeopleInput = getInputStream(rawPeoplePipe);
+    Stream rawStudiesInput = getInputStream(rawStudiesPipe);
+    Stream parsedPeopleOutput = getOutputStream(parsedPeoplePipe);
+    Stream parsedStudiesOutput = getOutputStream(parsedStudiesPipe);
+    Stream parsedPeopleInput = getInputStream(parsedPeoplePipe);
+    Stream parsedStudiesInput = getInputStream(parsedStudiesPipe);
+    Stream resultOutput = getOutputStream(resultPipe);
+    Stream resultInput = getInputStream(resultPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcPeopleParams = makeSourceParams(rawPeopleInput, parsedPeopleOutput, false);
+    int srcStudiesParams = makeSourceParams(rawStudiesInput, parsedStudiesOutput, false);
+    int workerParams = makeTwoInputParams(parsedPeopleInput, parsedStudiesInput, resultOutput, false);
+    int sinkParams = makeSinkParams(resultInput, resultsOutput, false);
+
+    createThread(CsvSourceProc, srcPeopleParams);
+    createThread(CsvSourceProc, srcStudiesParams);
+    createThread(PatronymicCountProc, workerParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run48_5() {
+    Pipe rawPeoplePipe = openPeopleCsvPipe();
+    Pipe rawStudentsPipe = openStudentsCsvPipe();
+    Pipe parsedPeoplePipe = createPipe();
+    Pipe parsedStudentsPipe = createPipe();
+    Pipe resultPipe = createPipe();
+    Pipe resultsPipe = open48_5ResultPipe();
+
+    Stream rawPeopleInput = getInputStream(rawPeoplePipe);
+    Stream rawStudentsInput = getInputStream(rawStudentsPipe);
+    Stream parsedPeopleOutput = getOutputStream(parsedPeoplePipe);
+    Stream parsedStudentsOutput = getOutputStream(parsedStudentsPipe);
+    Stream parsedPeopleInput = getInputStream(parsedPeoplePipe);
+    Stream parsedStudentsInput = getInputStream(parsedStudentsPipe);
+    Stream resultOutput = getOutputStream(resultPipe);
+    Stream resultInput = getInputStream(resultPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcPeopleParams = makeSourceParams(rawPeopleInput, parsedPeopleOutput, false);
+    int srcStudentsParams = makeSourceParams(rawStudentsInput, parsedStudentsOutput, false);
+    int workerParams =
+        make48_5_group_age_params(parsedPeopleInput, parsedStudentsInput, resultOutput);
+    int sinkParams = makeSinkParams(resultInput, resultsOutput, false);
+
+    createThread(CsvSourceProc, srcPeopleParams);
+    createThread(CsvSourceProc, srcStudentsParams);
+    createThread(GroupAgeProc, workerParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run48_6() {
+    Pipe rawPeoplePipe = openPeopleCsvPipe();
+    Pipe rawStudiesPipe = openStudiesCsvPipe();
+    Pipe rawStudentsPipe = openStudentsCsvPipe();
+    Pipe parsedPeoplePipe = createPipe();
+    Pipe parsedStudiesPipe = createPipe();
+    Pipe parsedStudentsPipe = createPipe();
+    Pipe resultPipe = createPipe();
+    Pipe resultsPipe = open48_6ResultPipe();
+
+    Stream rawPeopleInput = getInputStream(rawPeoplePipe);
+    Stream rawStudiesInput = getInputStream(rawStudiesPipe);
+    Stream rawStudentsInput = getInputStream(rawStudentsPipe);
+    Stream parsedPeopleOutput = getOutputStream(parsedPeoplePipe);
+    Stream parsedStudiesOutput = getOutputStream(parsedStudiesPipe);
+    Stream parsedStudentsOutput = getOutputStream(parsedStudentsPipe);
+    Stream parsedPeopleInput = getInputStream(parsedPeoplePipe);
+    Stream parsedStudiesInput = getInputStream(parsedStudiesPipe);
+    Stream parsedStudentsInput = getInputStream(parsedStudentsPipe);
+    Stream resultOutput = getOutputStream(resultPipe);
+    Stream resultInput = getInputStream(resultPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcPeopleParams = makeSourceParams(rawPeopleInput, parsedPeopleOutput, false);
+    int srcStudiesParams = makeSourceParams(rawStudiesInput, parsedStudiesOutput, false);
+    int srcStudentsParams = makeSourceParams(rawStudentsInput, parsedStudentsOutput, false);
+    int workerParams =
+        make48_6_enrollment_params(parsedPeopleInput, parsedStudiesInput, parsedStudentsInput,
+                                   resultOutput);
+    int sinkParams = makeSinkParams(resultInput, resultsOutput, false);
+
+    createThread(CsvSourceProc, srcPeopleParams);
+    createThread(CsvSourceProc, srcStudiesParams);
+    createThread(CsvSourceProc, srcStudentsParams);
+    createThread(EnrollmentListProc, workerParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run48_7() {
+    Pipe rawStudiesPipe = openStudiesCsvPipe();
+    Pipe rawVedomostiPipe = openVedomostiCsvPipe();
+    Pipe parsedStudiesPipe = createPipe();
+    Pipe parsedVedomostiPipe = createPipe();
+    Pipe resultPipe = createPipe();
+    Pipe resultsPipe = open48_7ResultPipe();
+
+    Stream rawStudiesInput = getInputStream(rawStudiesPipe);
+    Stream rawVedomostiInput = getInputStream(rawVedomostiPipe);
+    Stream parsedStudiesOutput = getOutputStream(parsedStudiesPipe);
+    Stream parsedVedomostiOutput = getOutputStream(parsedVedomostiPipe);
+    Stream parsedStudiesInput = getInputStream(parsedStudiesPipe);
+    Stream parsedVedomostiInput = getInputStream(parsedVedomostiPipe);
+    Stream resultOutput = getOutputStream(resultPipe);
+    Stream resultInput = getInputStream(resultPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcStudiesParams = makeSourceParams(rawStudiesInput, parsedStudiesOutput, false);
+    int srcVedomostiParams = makeSourceParams(rawVedomostiInput, parsedVedomostiOutput, false);
+    int workerParams =
+        makeTwoInputParams(parsedStudiesInput, parsedVedomostiInput, resultOutput, false);
+    int sinkParams = makeSinkParams(resultInput, resultsOutput, false);
+
+    createThread(CsvSourceProc, srcStudiesParams);
+    createThread(CsvSourceProc, srcVedomostiParams);
+    createThread(ExcellentCountProc, workerParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run78_1() {
+    Pipe rawTypesPipe = openTypesCsvPipe();
+    Pipe rawVedomostiPipe = openVedomostiCsvPipe();
+    Pipe parsedTypesPipe = createPipe();
+    Pipe parsedVedomostiPipe = createPipe();
+    Pipe filteredTypesPipe = createPipe();
+    Pipe filteredVedomostiPipe1 = createPipe();
+    Pipe filteredVedomostiPipe2 = createPipe();
+    Pipe joinedPipe = createPipe();
+    Pipe resultsPipe = open78_1ResultPipe();
+
+    Stream rawTypesInput = getInputStream(rawTypesPipe);
+    Stream rawVedomostiInput = getInputStream(rawVedomostiPipe);
+    Stream parsedTypesOutput = getOutputStream(parsedTypesPipe);
+    Stream parsedVedomostiOutput = getOutputStream(parsedVedomostiPipe);
+    Stream parsedTypesInput = getInputStream(parsedTypesPipe);
+    Stream parsedVedomostiInput = getInputStream(parsedVedomostiPipe);
+    Stream filteredTypesOutput = getOutputStream(filteredTypesPipe);
+    Stream filteredVedomostiOutput1 = getOutputStream(filteredVedomostiPipe1);
+    Stream filteredVedomostiInput1 = getInputStream(filteredVedomostiPipe1);
+    Stream filteredVedomostiOutput2 = getOutputStream(filteredVedomostiPipe2);
+    Stream filteredTypesInput = getInputStream(filteredTypesPipe);
+    Stream filteredVedomostiInput2 = getInputStream(filteredVedomostiPipe2);
+    Stream joinedOutput = getOutputStream(joinedPipe);
+    Stream joinedInput = getInputStream(joinedPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcTypesParams = makeSourceParams(rawTypesInput, parsedTypesOutput, true);
+    int srcVedomostiParams = makeSourceParams(rawVedomostiInput, parsedVedomostiOutput, true);
+    int filterTypesParams = make78_1_types_filter_params(parsedTypesInput, filteredTypesOutput);
+    int filterVedomostiParams1 =
+        make78_1_veds_filter1_params(parsedVedomostiInput, filteredVedomostiOutput1);
+    int filterVedomostiParams2 =
+        make78_1_veds_filter2_params(filteredVedomostiInput1, filteredVedomostiOutput2);
+    int joinParams = make78_1_join_params(filteredTypesInput, filteredVedomostiInput2, joinedOutput);
+    int sinkParams = makeSinkParams(joinedInput, resultsOutput, true);
+
+    createThread(CsvSourceProc, srcTypesParams);
+    createThread(CsvSourceProc, srcVedomostiParams);
+    createThread(FilterIntFieldProc, filterTypesParams);
+    createThread(FilterIntFieldProc, filterVedomostiParams1);
+    createThread(FilterIntFieldProc, filterVedomostiParams2);
+    createThread(JoinTypesVedomostiProc, joinParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run78_2() {
+    Pipe rawPeoplePipe = openPeopleCsvPipe();
+    Pipe rawStudiesPipe = openStudiesCsvPipe();
+    Pipe rawStudentsPipe = openStudentsCsvPipe();
+    Pipe parsedPeoplePipe = createPipe();
+    Pipe parsedStudiesPipe = createPipe();
+    Pipe parsedStudentsPipe = createPipe();
+    Pipe filteredPeoplePipe = createPipe();
+    Pipe filteredStudiesPipe = createPipe();
+    Pipe joinedPipe = createPipe();
+    Pipe resultsPipe = open78_2ResultPipe();
+
+    Stream rawPeopleInput = getInputStream(rawPeoplePipe);
+    Stream rawStudiesInput = getInputStream(rawStudiesPipe);
+    Stream rawStudentsInput = getInputStream(rawStudentsPipe);
+    Stream parsedPeopleOutput = getOutputStream(parsedPeoplePipe);
+    Stream parsedStudiesOutput = getOutputStream(parsedStudiesPipe);
+    Stream parsedStudentsOutput = getOutputStream(parsedStudentsPipe);
+    Stream parsedPeopleInput = getInputStream(parsedPeoplePipe);
+    Stream parsedStudiesInput = getInputStream(parsedStudiesPipe);
+    Stream parsedStudentsInput = getInputStream(parsedStudentsPipe);
+    Stream filteredPeopleOutput = getOutputStream(filteredPeoplePipe);
+    Stream filteredStudiesOutput = getOutputStream(filteredStudiesPipe);
+    Stream filteredPeopleInput = getInputStream(filteredPeoplePipe);
+    Stream filteredStudiesInput = getInputStream(filteredStudiesPipe);
+    Stream joinedOutput = getOutputStream(joinedPipe);
+    Stream joinedInput = getInputStream(joinedPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcPeopleParams = makeSourceParams(rawPeopleInput, parsedPeopleOutput, true);
+    int srcStudiesParams = makeSourceParams(rawStudiesInput, parsedStudiesOutput, true);
+    int srcStudentsParams = makeSourceParams(rawStudentsInput, parsedStudentsOutput, true);
+    int filterPeopleParams = make78_2_people_filter_params(parsedPeopleInput, filteredPeopleOutput);
+    int filterStudiesParams =
+        make78_2_studies_filter_params(parsedStudiesInput, filteredStudiesOutput);
+    int joinParams = make78_2_join_params(filteredPeopleInput, filteredStudiesInput,
+                                          parsedStudentsInput, joinedOutput);
+    int sinkParams = makeSinkParams(joinedInput, resultsOutput, true);
+
+    createThread(CsvSourceProc, srcPeopleParams);
+    createThread(CsvSourceProc, srcStudiesParams);
+    createThread(CsvSourceProc, srcStudentsParams);
+    createThread(FilterTextFieldProc, filterPeopleParams);
+    createThread(FilterIntFieldProc, filterStudiesParams);
+    createThread(JoinPeopleStudiesStudentsProc, joinParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run78_3() {
+    Pipe rawPeoplePipe = openPeopleCsvPipe();
+    Pipe parsedPeoplePipe = createPipe();
+    Pipe resultPipe = createPipe();
+    Pipe resultsPipe = open78_3ResultPipe();
+
+    Stream rawPeopleInput = getInputStream(rawPeoplePipe);
+    Stream parsedPeopleOutput = getOutputStream(parsedPeoplePipe);
+    Stream parsedPeopleInput = getInputStream(parsedPeoplePipe);
+    Stream resultOutput = getOutputStream(resultPipe);
+    Stream resultInput = getInputStream(resultPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcParams = makeSourceParams(rawPeopleInput, parsedPeopleOutput, true);
+    int workerParams = makeSingleInputParams(parsedPeopleInput, resultOutput, true);
+    int sinkParams = makeSinkParams(resultInput, resultsOutput, true);
+
+    createThread(CsvSourceProc, srcParams);
+    createThread(UniqueBirthdaysProc, workerParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run78_4() {
+    Pipe rawStudiesPipe = openStudiesCsvPipe();
+    Pipe rawStudentsPipe = openStudentsCsvPipe();
+    Pipe parsedStudiesPipe = createPipe();
+    Pipe parsedStudentsPipe = createPipe();
+    Pipe resultPipe = createPipe();
+    Pipe resultsPipe = open78_4ResultPipe();
+
+    Stream rawStudiesInput = getInputStream(rawStudiesPipe);
+    Stream rawStudentsInput = getInputStream(rawStudentsPipe);
+    Stream parsedStudiesOutput = getOutputStream(parsedStudiesPipe);
+    Stream parsedStudentsOutput = getOutputStream(parsedStudentsPipe);
+    Stream parsedStudiesInput = getInputStream(parsedStudiesPipe);
+    Stream parsedStudentsInput = getInputStream(parsedStudentsPipe);
+    Stream resultOutput = getOutputStream(resultPipe);
+    Stream resultInput = getInputStream(resultPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcStudiesParams = makeSourceParams(rawStudiesInput, parsedStudiesOutput, true);
+    int srcStudentsParams = makeSourceParams(rawStudentsInput, parsedStudentsOutput, true);
+    int workerParams =
+        makeTwoInputParams(parsedStudiesInput, parsedStudentsInput, resultOutput, true);
+    int sinkParams = makeSinkParams(resultInput, resultsOutput, true);
+
+    createThread(CsvSourceProc, srcStudiesParams);
+    createThread(CsvSourceProc, srcStudentsParams);
+    createThread(Group2011Proc, workerParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run78_5() {
+    Pipe rawPeoplePipe = openPeopleCsvPipe();
+    Pipe rawStudentsPipe = openStudentsCsvPipe();
+    Pipe parsedPeoplePipe = createPipe();
+    Pipe parsedStudentsPipe = createPipe();
+    Pipe resultPipe = createPipe();
+    Pipe resultsPipe = open78_5ResultPipe();
+
+    Stream rawPeopleInput = getInputStream(rawPeoplePipe);
+    Stream rawStudentsInput = getInputStream(rawStudentsPipe);
+    Stream parsedPeopleOutput = getOutputStream(parsedPeoplePipe);
+    Stream parsedStudentsOutput = getOutputStream(parsedStudentsPipe);
+    Stream parsedPeopleInput = getInputStream(parsedPeoplePipe);
+    Stream parsedStudentsInput = getInputStream(parsedStudentsPipe);
+    Stream resultOutput = getOutputStream(resultPipe);
+    Stream resultInput = getInputStream(resultPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcPeopleParams = makeSourceParams(rawPeopleInput, parsedPeopleOutput, true);
+    int srcStudentsParams = makeSourceParams(rawStudentsInput, parsedStudentsOutput, true);
+    int workerParams =
+        make78_5_group_age_params(parsedPeopleInput, parsedStudentsInput, resultOutput);
+    int sinkParams = makeSinkParams(resultInput, resultsOutput, true);
+
+    createThread(CsvSourceProc, srcPeopleParams);
+    createThread(CsvSourceProc, srcStudentsParams);
+    createThread(GroupAgeProc, workerParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run78_6() {
+    Pipe rawPeoplePipe = openPeopleCsvPipe();
+    Pipe rawStudiesPipe = openStudiesCsvPipe();
+    Pipe rawStudentsPipe = openStudentsCsvPipe();
+    Pipe parsedPeoplePipe = createPipe();
+    Pipe parsedStudiesPipe = createPipe();
+    Pipe parsedStudentsPipe = createPipe();
+    Pipe resultPipe = createPipe();
+    Pipe resultsPipe = open78_6ResultPipe();
+
+    Stream rawPeopleInput = getInputStream(rawPeoplePipe);
+    Stream rawStudiesInput = getInputStream(rawStudiesPipe);
+    Stream rawStudentsInput = getInputStream(rawStudentsPipe);
+    Stream parsedPeopleOutput = getOutputStream(parsedPeoplePipe);
+    Stream parsedStudiesOutput = getOutputStream(parsedStudiesPipe);
+    Stream parsedStudentsOutput = getOutputStream(parsedStudentsPipe);
+    Stream parsedPeopleInput = getInputStream(parsedPeoplePipe);
+    Stream parsedStudiesInput = getInputStream(parsedStudiesPipe);
+    Stream parsedStudentsInput = getInputStream(parsedStudentsPipe);
+    Stream resultOutput = getOutputStream(resultPipe);
+    Stream resultInput = getInputStream(resultPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcPeopleParams = makeSourceParams(rawPeopleInput, parsedPeopleOutput, true);
+    int srcStudiesParams = makeSourceParams(rawStudiesInput, parsedStudiesOutput, true);
+    int srcStudentsParams = makeSourceParams(rawStudentsInput, parsedStudentsOutput, true);
+    int workerParams =
+        make78_6_enrollment_params(parsedPeopleInput, parsedStudiesInput, parsedStudentsInput,
+                                   resultOutput);
+    int sinkParams = makeSinkParams(resultInput, resultsOutput, true);
+
+    createThread(CsvSourceProc, srcPeopleParams);
+    createThread(CsvSourceProc, srcStudiesParams);
+    createThread(CsvSourceProc, srcStudentsParams);
+    createThread(EnrollmentListProc, workerParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int Run78_7() {
+    Pipe rawPeoplePipe = openPeopleCsvPipe();
+    Pipe rawStudentsPipe = openStudentsCsvPipe();
+    Pipe parsedPeoplePipe = createPipe();
+    Pipe parsedStudentsPipe = createPipe();
+    Pipe resultPipe = createPipe();
+    Pipe resultsPipe = open78_7ResultPipe();
+
+    Stream rawPeopleInput = getInputStream(rawPeoplePipe);
+    Stream rawStudentsInput = getInputStream(rawStudentsPipe);
+    Stream parsedPeopleOutput = getOutputStream(parsedPeoplePipe);
+    Stream parsedStudentsOutput = getOutputStream(parsedStudentsPipe);
+    Stream parsedPeopleInput = getInputStream(parsedPeoplePipe);
+    Stream parsedStudentsInput = getInputStream(parsedStudentsPipe);
+    Stream resultOutput = getOutputStream(resultPipe);
+    Stream resultInput = getInputStream(resultPipe);
+    Stream resultsOutput = getOutputStream(resultsPipe);
+
+    int srcPeopleParams = makeSourceParams(rawPeopleInput, parsedPeopleOutput, true);
+    int srcStudentsParams = makeSourceParams(rawStudentsInput, parsedStudentsOutput, true);
+    int workerParams =
+        makeTwoInputParams(parsedPeopleInput, parsedStudentsInput, resultOutput, true);
+    int sinkParams = makeSinkParams(resultInput, resultsOutput, true);
+
+    createThread(CsvSourceProc, srcPeopleParams);
+    createThread(CsvSourceProc, srcStudentsParams);
+    createThread(NonStudentsProc, workerParams);
+    createThread(ResultsSinkProc, sinkParams);
+
+    return waitAllThreads();
+}
+
+int RunSelection48() {
+    Run48_1();
+    Run48_2();
+    Run48_3();
+    Run48_4();
+    Run48_5();
+    Run48_6();
+    return Run48_7();
+}
+
+int RunSelection78() {
+    Run78_1();
+    Run78_2();
+    Run78_3();
+    Run78_4();
+    Run78_5();
+    Run78_6();
+    return Run78_7();
+}
+
+int main() {
+    RunSelection48();
+    return RunSelection78();
+}
